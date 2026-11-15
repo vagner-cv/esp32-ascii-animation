@@ -7,7 +7,9 @@
 inline uint32_t hostMillis=0;
 inline uint32_t millis() { return hostMillis; }
 inline void delay(uint32_t ms) { hostMillis+=ms; }
-constexpr int OUTPUT=1,LOW=0,HIGH=1;
+constexpr int OUTPUT=1,LOW=0,HIGH=1,INPUT_PULLUP=2;
+inline int hostButton=HIGH;
+inline int digitalRead(int){return hostButton;}
 inline void pinMode(int,int) {}
 inline void digitalWrite(int,int) {}
 struct HostSerial {

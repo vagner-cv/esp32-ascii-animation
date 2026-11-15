@@ -95,3 +95,9 @@ Depois de gravar cada sketch:
 7. Compare `ASCII_HIGH_DETAIL=1` e `0` caso queira escolher entre maior densidade e símbolos mais nítidos.
 
 Para restaurar um firmware anterior, grave novamente o sketch do projeto correspondente.
+
+## Firmware único
+
+`tests/all_test.cpp` verifica alternância das seis cenas, retorno à primeira, reutilização do cache, debounce, toque curto e toque longo sem avanço extra, além do ganho de luminosidade. Teste no computador com AddressSanitizer/UndefinedBehaviorSanitizer aprovado. O botão físico e o ganho na tela precisam ser conferidos na placa.
+
+Compilação real de `Todas_ASCII`: aprovada com o mesmo FQBN e versões acima; 399.616 bytes de flash e 74.048 bytes de variáveis globais. Regressão do renderizador e controles das seis versões individuais aprovada no computador.

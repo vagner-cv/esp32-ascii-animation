@@ -6,7 +6,8 @@ from zipfile import ZipFile, ZIP_DEFLATED
 ROOT=Path(__file__).resolve().parents[1]
 out=ROOT/"downloads"
 out.mkdir(exist_ok=True)
-for name in ("Arvore_ASCII","Arvore_ASCII_Codigo","AguaViva_ASCII","AguaViva_ASCII_Codigo","GloboNeve_ASCII","GloboNeve_ASCII_Codigo"):
+for name in ("Arvore_ASCII","Arvore_ASCII_Codigo","AguaViva_ASCII","AguaViva_ASCII_Codigo","GloboNeve_ASCII","GloboNeve_ASCII_Codigo","Todas_ASCII"):
+    controls="Toque curto no botao GPIO12: proxima animacao. Segure 1s: luminosidade das cores. Altere ASCII_BUTTON_PIN no .ino para outro botao ativo em LOW, ligado ao GND." if name=="Todas_ASCII" else ""
     with ZipFile(out/(name+".zip"),"w",ZIP_DEFLATED) as zipfile:
         for file in sorted((ROOT/name).rglob("*")):
             if file.is_file(): zipfile.write(file,file.relative_to(ROOT))
@@ -20,6 +21,8 @@ for name in ("Arvore_ASCII","Arvore_ASCII_Codigo","AguaViva_ASCII","AguaViva_ASC
 
 Monitor Serial: 115200 baud. Envie p para pausar/retomar ou r para reiniciar.
 O upload substitui o firmware atual da placa. Para restaurar outro firmware, grave novamente o sketch do projeto correspondente.
+
+{controls}
 
 A tela física tem 240 x 240 pixels. ASCII_HIGH_DETAIL=1 usa 80 x 60 caracteres suavizados;
 ASCII_HIGH_DETAIL=0 usa 60 x 40 caracteres nítidos. Nas versões com código, a cena ocupa

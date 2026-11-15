@@ -45,3 +45,10 @@ void setup() {{ ascii_show::begin(); }}
 void loop() {{ ascii_show::tick(); }}
 ''')
 print("Generated six standalone sketches and source excerpts.")
+
+name="Todas_ASCII"
+sketch=ROOT/name
+(sketch/"src").mkdir(parents=True,exist_ok=True)
+for header in (ROOT/"engine").glob("*.h"):
+    shutil.copyfile(header,sketch/"src"/header.name)
+(sketch/(name+".ino")).write_text('// Firmware unico: seis animacoes. Botao curto = proxima; segurar 1s = luminosidade.\n#define ASCII_TREE 1\n#define ASCII_CODE 0\n#define ASCII_GLOBE 0\n#define ASCII_HIGH_DETAIL 1\n#define ASCII_ALL 1\n#define ASCII_BUTTON_PIN 12 // Botao externo "proximo" documentado; ativo em LOW.\n#include "src/AsciiShow.h"\nvoid setup(){ascii_show::begin();}\nvoid loop(){ascii_show::tick();}\n')

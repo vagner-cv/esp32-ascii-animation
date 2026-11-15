@@ -40,6 +40,18 @@ Caracteres nessa densidade ficam muito pequenos. Para priorizar a nitidez de cad
 
 O padrão é `1`, com o acabamento mais denso e suavizado. A resolução física é a mesma nos dois ajustes.
 
+## Firmware único: todas as animações
+
+[Baixar Todas_ASCII.zip](downloads/Todas_ASCII.zip?raw=true). Extraia a pasta inteira e abra `Todas_ASCII/Todas_ASCII.ino`; as seis animações são gravadas juntas.
+
+- Clique curto no botão configurado: próxima animação, circulando pelas seis versões.
+- Segure por 1 segundo: alterna a luminosidade das cores entre 1×, 1,25×, 1,5× e 2×, sem trocar a animação na soltura.
+- Padrão: `ASCII_BUTTON_PIN 12`, botão externo “próximo” registrado na documentação da montagem, ligado entre GPIO12 e GND. A entrada usa `INPUT_PULLUP` e debounce de 35 ms. A pinagem física precisa ser confirmada na montagem.
+- Para outro botão, altere `ASCII_BUTTON_PIN` no início do `.ino`. RESET reinicia a placa e não serve para avançar as animações.
+- Serial: `n` também avança; `p` pausa e `r` reinicia.
+
+O **backlight já fica ligado continuamente no GPIO20**, sem PWM reduzindo seu nível. O ajuste por toque longo aumenta os valores das cores renderizadas; não eleva a potência do backlight. Sombras continuam presentes, mas cores muito claras podem saturar no ganho de 2×. O firmware reutiliza o mesmo cache de pontos ao trocar de cena.
+
 ## Instalação
 
 1. Baixe o ZIP da versão desejada em [`downloads/`](downloads/) e extraia a pasta inteira, **incluindo `src/`**. Também pode baixar este repositório inteiro em **Code → Download ZIP**.

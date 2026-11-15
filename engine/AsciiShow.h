@@ -7,6 +7,15 @@
 #include "CodeLines.h"
 
 namespace ascii_show {
+#ifndef ASCII_ALL
+#define ASCII_ALL 0
+#endif
+#ifndef ASCII_BUTTON_PIN
+#define ASCII_BUTTON_PIN 12
+#endif
+static bool showTree=ASCII_TREE,showGlobe=ASCII_GLOBE,showCode=ASCII_CODE;
+static uint8_t modeIndex=0,exposureIndex=0;
+static float exposure=1.0f;
 // Waveshare ESP32-S3-LCD-1.3: integrated LCD pins, offsets and display rotation.
 constexpr int LCD_DC=38, LCD_CS=39, LCD_SCK=40, LCD_MOSI=41, LCD_RST=42, LCD_BL=20;
 constexpr uint8_t DISPLAY_ROTATION=1;
@@ -82,11 +91,11 @@ inline void codePanel(float time) {
   canvas->fillRect(0,TOP,240,HEADER,rgb(20,27,42));
   canvas->drawFastHLine(0,TOP,240,rgb(64,79,102));
   canvas->setTextColor(rgb(157,186,211));canvas->setCursor(4,TOP+3);
-  canvas->print(ASCII_GLOBE?"snow_globe.cpp":(ASCII_TREE?"christmas_tree.cpp":"jellyfish.cpp"));
+  canvas->print(showGlobe?"snow_globe.cpp":(showTree?"christmas_tree.cpp":"jellyfish.cpp"));
   canvas->setTextColor(rgb(85,224,191));canvas->setCursor(192,TOP+3);
   canvas->print(paused?"PAUSADO":"CODIGO");
-  const char *const *lines=ASCII_GLOBE?GLOBE_CODE:(ASCII_TREE?TREE_CODE:JELLY_CODE);
-  int length=ASCII_GLOBE?GLOBE_CODE_COUNT:(ASCII_TREE?TREE_CODE_COUNT:JELLY_CODE_COUNT);
+  const char *const *lines=showGlobe?GLOBE_CODE:(showTree?TREE_CODE:JELLY_CODE);
+  int length=showGlobe?GLOBE_CODE_COUNT:(showTree?TREE_CODE_COUNT:JELLY_CODE_COUNT);
   uint32_t scroll=uint32_t(time*12);
   int first=(scroll/LINE_H)%length, offset=scroll%LINE_H;
   canvas->fillRect(0,BODY+3*LINE_H,240,LINE_H,rgb(19,31,48));
@@ -97,25 +106,50 @@ inline void codePanel(float time) {
   }
 }
 inline void renderFrame(float time) {
-  scene->render(time,ASCII_CODE);
+  scene->render(time,showCode);
   canvas->fillScreen(0);
   if(scene->hasGlow) for(int y=0;y<scene->rows*CELL_H;++y) for(int x=0;x<240;++x) {
     uint16_t bg=scene->glowAt(x,y);if(bg) canvas->drawPixel(x,y,bg);
   }
   for(int y=0;y<scene->rows;++y) for(int x=0;x<COLS;++x) {
     const Cell &c=scene->cells[y*COLS+x];
-    if(c.glyph!=' ') miniGlyph(x*CELL_W,y*CELL_H,c.glyph,c.color);
+    if(c.glyph!=' ') miniGlyph(x*CELL_W,y*CELL_H,c.glyph,shade(c.color,exposure));
   }
-  if(ASCII_TREE && fmodf(time,40)>13) {
+  if(showTree && fmodf(time,40)>13) {
     canvas->setCursor(87,scene->rows*CELL_H-8);canvas->setTextColor(rgb(222,187,91));
     canvas->print("FELIZ NATAL");
   }
-  if(ASCII_GLOBE) {
+  if(showGlobe) {
     canvas->setCursor(75,2);canvas->setTextColor(rgb(192,209,240));
     canvas->print("SNOW IN BANGKOK");
   }
-  if(ASCII_CODE) codePanel(time);
+  if(showCode) codePanel(time);
   canvas->flush();
+}
+inline void selectMode(uint8_t mode) {
+  modeIndex=mode%6;showTree=modeIndex<2;showGlobe=modeIndex>=4;showCode=(modeIndex%2)!=0;
+  scene->tree=showTree;scene->globe=showGlobe;
+  if(showTree)scene->buildTree();
+  else if(showGlobe)scene->buildGlobe();
+  else scene->count=0;
+  clockMs=0;paused=false;lastTick=millis();
+  Serial.printf("Modo %u: %s / %s\n",unsigned(modeIndex+1),showGlobe?"globo":(showTree?"arvore":"agua-viva"),showCode?"com codigo":"tela cheia");
+}
+inline void pollButton() {
+  static bool rawDown=false,stableDown=false,longHandled=false;
+  static uint32_t changed=0,pressed=0;
+  uint32_t now=millis();bool down=digitalRead(ASCII_BUTTON_PIN)==LOW;
+  if(down!=rawDown){rawDown=down;changed=now;}
+  if(uint32_t(now-changed)>=35 && stableDown!=rawDown) {
+    stableDown=rawDown;
+    if(stableDown){pressed=now;longHandled=false;}
+    else if(!longHandled)selectMode(modeIndex+1);
+  }
+  if(stableDown && !longHandled && uint32_t(now-pressed)>=1000) {
+    longHandled=true;exposureIndex=(exposureIndex+1)%4;
+    static const float levels[]={1.0f,1.25f,1.5f,2.0f};exposure=levels[exposureIndex];
+    Serial.printf("Luminosidade das cores: %.2fx (backlight permanece ligado)\n",exposure);
+  }
 }
 inline void begin() {
   Serial.begin(115200);
@@ -124,7 +158,7 @@ inline void begin() {
   if(!canvas->begin(40000000)) { Serial.println("ERRO: falha ao iniciar display/canvas"); return; }
   canvas->fillScreen(0);canvas->flush();digitalWrite(LCD_BL,HIGH);
   canvas->setTextSize(1);canvas->setTextWrap(false);prepareGlyphs();
-  if(ASCII_TREE || ASCII_GLOBE) {
+  if(showTree || showGlobe || ASCII_ALL) {
     size_t bytes=sizeof(Point)*MAX_POINTS;
     Serial.printf("PSRAM disponivel: %u bytes\n",unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)));
     storage=static_cast<Point *>(heap_caps_malloc(bytes,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
@@ -150,23 +184,26 @@ inline void begin() {
       canvas->print("Ative OPI PSRAM");canvas->flush();return;
     }
   }
-  static Scene instance(ASCII_TREE,storage,ASCII_GLOBE,storageCapacity);scene=&instance;
-  if(ASCII_TREE) scene->buildTree();
-  if(ASCII_GLOBE) scene->buildGlobe();
+  static Scene instance(showTree,storage,showGlobe,storageCapacity);scene=&instance;
+  if(showTree) scene->buildTree();
+  if(showGlobe) scene->buildGlobe();
   if(scene->overflow) { Serial.println("ERRO: capacidade de pontos excedida"); return; }
-  Serial.printf("ASCII %s / %s | pontos=%d | grade=%dx%d\n",ASCII_GLOBE?"globo de neve":(ASCII_TREE?"arvore":"agua-viva"),ASCII_CODE?"com codigo":"tela cheia",scene->count,COLS,ASCII_CODE?SPLIT_ROWS:MAX_ROWS);
+  Serial.printf("ASCII %s / %s | pontos=%d | grade=%dx%d\n",showGlobe?"globo de neve":(showTree?"arvore":"agua-viva"),showCode?"com codigo":"tela cheia",scene->count,COLS,showCode?SPLIT_ROWS:MAX_ROWS);
   Serial.println("Serial: p=pausar/retomar, r=reiniciar. 115200 baud.");
   ready=true;lastTick=millis();lastReport=lastTick;
+  if(ASCII_ALL){pinMode(ASCII_BUTTON_PIN,INPUT_PULLUP);selectMode(0);}
   renderFrame(0);
 }
 inline void tick() {
   if(!ready) { delay(20); return; }
   uint32_t now=millis(),dt=now-lastTick;lastTick=now;
   if(!paused) clockMs+=dt;
+  if(ASCII_ALL)pollButton();
   while(Serial.available()) {
     char c=Serial.read();
     if(c=='p' || c=='P') paused=!paused;
     if(c=='r' || c=='R') clockMs=0;
+    if(ASCII_ALL && (c=='n' || c=='N'))selectMode(modeIndex+1);
   }
   if(uint32_t(now-lastDraw)<FRAME_MS) { delay(1); return; }
   lastDraw=now;

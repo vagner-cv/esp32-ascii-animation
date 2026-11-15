@@ -21,3 +21,7 @@ Este repositório contém seis animações ASCII para a **Waveshare ESP32-S3-LCD
 - Atualizar instruções, ZIPs (`python3 tools/package.py`) e prévias quando as alterações afetarem a distribuição ou o visual.
 - `VALIDACAO.md` documenta as verificações existentes e os comandos para reproduzi-las. Não afirmar upload, FPS ou funcionamento físico sem o teste correspondente na placa.
 - Nunca adicionar credenciais ou segredos.
+
+## Firmware único
+
+`Todas_ASCII` reúne as seis cenas. Botão padrão GPIO12, correspondente ao botão externo próximo documentado na montagem; confirmar a ligação física. Clique curto avança; segurar 1s muda ganho das cores. Backlight GPIO20 permanece em HIGH. Não confundir ganho de renderização com PWM do backlight.
