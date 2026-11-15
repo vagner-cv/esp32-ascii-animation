@@ -1,7 +1,7 @@
 #pragma once
 namespace ascii_show {
 static const char *const TREE_CODE[] = {
-  "count=0; overflow=false;",
+  "resetPoints();",
   "const char *ramp=\"xv%&#W\";",
   "// Whorls of sagging branches, with a dark core for a solid silhouette.",
   "for (int layer=0; layer<21; ++layer) {",
@@ -76,6 +76,7 @@ static const char *const TREE_CODE[] = {
   "  }",
   "  if(inside) add(x,1.025f+y,0,rgb(255,218,78),11.5f,'#',STAR);",
   "}",
+  "finishPoints();",
   "  }",
 };
 constexpr int TREE_CODE_COUNT = sizeof(TREE_CODE)/sizeof(TREE_CODE[0]);
@@ -130,4 +131,32 @@ static const char *const JELLY_CODE[] = {
   "  }",
 };
 constexpr int JELLY_CODE_COUNT = sizeof(JELLY_CODE)/sizeof(JELLY_CODE[0]);
+static const char *const GLOBE_CODE[] = {
+  "for(int iz=0;iz<12;++iz) for(int ix=-15;ix<=15;++ix)",
+  "  project(ix*0.12f,-1.13f,(iz-6)*0.17f,'.',rgb(23,31,53),false);",
+  "// Rotate the geometry and its normals together; key light stays at the camera.",
+  "for(int i=0;i<count;++i) {",
+  "  const Point &p=points[i];",
+  "  float nx=(p.nx*spinC-p.nz*spinS)/127.0f,nz=(p.nx*spinS+p.nz*spinC)/127.0f,ny=p.ny/127.0f;",
+  "  float lam=diffuse(nx,ny,nz),light=(0.18f+0.94f*lam)*(p.ao/255.0f);",
+  "  float spec=p.kind==GOLD?specular(nx,ny,nz)*0.6f:0;",
+  "  if(p.kind==SNOW) light=0.30f+0.78f*lam;",
+  "  if(p.kind==STAR) light=1;",
+  "  if(p.kind==LIGHT) light=0.65f+0.35f*sinf(t*2.2f+i)*sinf(t*2.2f+i);",
+  "  uint16_t col=highlight(shade(p.color,light),spec);",
+  "  char glyph=p.kind==NEEDLE?toneGlyph(light,true):toneGlyph(light);",
+  "  if(p.kind==LIGHT || p.kind==STAR) glyph=p.glyph;",
+  "  if(p.kind==GOLD) glyph='=';",
+  "  project(p.x,p.y,p.z,glyph,col,true,(p.kind==LIGHT || p.kind==STAR)?180:0);",
+  "}",
+  "for(int i=0;i<190;++i) {",
+  "  float x,y,z;if(!snowflake(i,t,x,y,z)) continue;",
+  "  float depth=x*spinS+z*spinC;",
+  "  float bright=0.45f+0.55f*clamp((GLOBE_R-depth)/(2*GLOBE_R),0,1);",
+  "  project(x,y,z,i%6==0?'*':'.',shade(rgb(221,231,255),bright));",
+  "}",
+  "glass();",
+  "}",
+};
+constexpr int GLOBE_CODE_COUNT = sizeof(GLOBE_CODE)/sizeof(GLOBE_CODE[0]);
 }

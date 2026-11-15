@@ -6,7 +6,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 ROOT=Path(__file__).resolve().parents[1]
 out=ROOT/"downloads"
 out.mkdir(exist_ok=True)
-for name in ("Arvore_ASCII","Arvore_ASCII_Codigo","AguaViva_ASCII","AguaViva_ASCII_Codigo"):
+for name in ("Arvore_ASCII","Arvore_ASCII_Codigo","AguaViva_ASCII","AguaViva_ASCII_Codigo","GloboNeve_ASCII","GloboNeve_ASCII_Codigo"):
     with ZipFile(out/(name+".zip"),"w",ZIP_DEFLATED) as zipfile:
         for file in sorted((ROOT/name).rglob("*")):
             if file.is_file(): zipfile.write(file,file.relative_to(ROOT))
@@ -28,7 +28,7 @@ com trechos reais de C++ rolando. As animações funcionam offline, sem módulos
 
 LCD: DC 38, CS 39, SCK 40, MOSI 41, RST 42, BL 20. Rotação do canvas: 1 (90 graus).
 
-Prévias, documentação e as quatro versões:
+Prévias, documentação e as seis versões:
 https://github.com/vagner-cv/esp32-ascii-animation
 
 Consulte VALIDACAO.md para os testes realizados e as verificações físicas ainda pendentes.

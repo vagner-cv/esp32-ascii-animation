@@ -66,5 +66,16 @@ int main() {
   jelly.put(-1,0,0,'#',1);jelly.put(COLS,0,0,'#',1);jelly.put(0,MAX_ROWS,0,'#',1);
   jelly.project(0,0,-100,'#',1,false);assert(checksum(jelly)==original);
   Scene empty(true,nullptr);empty.buildTree();assert(empty.overflow && empty.count==0);
+  // A small cache still contains every material, rather than truncating later
+  // additions such as presents and the star after filling it with foliage.
+  for(int capacity:{512,2048,3072}) {
+    std::unique_ptr<Point[]> small(new Point[capacity]);
+    Scene light(true,small.get(),false,capacity);light.buildTree();
+    assert(!light.overflow && light.count==capacity);
+    std::set<int> materials;for(int i=0;i<light.count;++i)materials.insert(light.points[i].kind);
+    assert(materials.size()==7);
+    light.render(15,false);assert(occupied(light)>100);
+    light.render(16,true);assert(occupied(light)>50);
+  }
   std::printf("PASS: %d tree points (%zu bytes), 1280 animated frames, both layouts, depth/clipping/restart.\n",tree.count,sizeof(Point)*MAX_POINTS);
 }

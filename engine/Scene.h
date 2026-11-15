@@ -9,6 +9,9 @@ namespace ascii_show {
 #ifndef ASCII_HIGH_DETAIL
 #define ASCII_HIGH_DETAIL 1
 #endif
+#ifndef ASCII_GLOBE
+#define ASCII_GLOBE 0
+#endif
 constexpr float PI_F = 3.14159265358979323846f;
 constexpr float TAU = 2.0f * PI_F;
 constexpr int CELL_W = ASCII_HIGH_DETAIL?3:4, CELL_H = ASCII_HIGH_DETAIL?4:6;
@@ -60,7 +63,7 @@ struct Point {
   float x,y,z; uint16_t color,born; char glyph; uint8_t kind;
   int8_t nx,ny,nz;uint8_t ao;
 };
-enum Kind : uint8_t { NEEDLE, WOOD, GOLD, BALL, LIGHT, GIFT, STAR };
+enum Kind : uint8_t { NEEDLE, WOOD, GOLD, BALL, LIGHT, GIFT, STAR, SNOW, ARCH, RED_STEEL };
 class Scene {
  public:
   Cell cells[COLS*MAX_ROWS];
@@ -68,11 +71,28 @@ class Scene {
   bool hasGlow=false;
   int rows = MAX_ROWS;
   bool tree;
+  bool globe;
   Point *points;
+  int pointCapacity;
+  uint32_t normalSeen=0,brightSeen=0;
+  int normalKept=0,brightKept=0;
   int count = 0;
   bool overflow = false;
   float angle = 0, spinC = 1, spinS = 0;
-  explicit Scene(bool isTree, Point *storage) : tree(isTree), points(storage) {}
+  explicit Scene(bool isTree, Point *storage,bool isGlobe=false,int capacity=MAX_POINTS)
+    : tree(isTree), globe(isGlobe), points(storage),pointCapacity(capacity<2?2:(capacity>MAX_POINTS?MAX_POINTS:capacity)) {}
+  void resetPoints() {count=0;overflow=false;normalSeen=brightSeen=0;normalKept=brightKept=0;}
+  void finishPoints() {
+    if(pointCapacity==MAX_POINTS || !points) return;
+    int normalQuota=pointCapacity-pointCapacity/4;
+    for(int i=0;i<brightKept;++i)points[normalKept+i]=points[normalQuota+i];
+    count=normalKept+brightKept;
+  }
+  float viewScale() const { return (rows*CELL_H)*(globe?0.345f:0.37f); }
+  void buildGlobe();
+  void drawGlobe(float t);
+  void glass();
+  static bool snowflake(int i,float t,float &x,float &y,float &z);
   void put(int x, int y, float z, char ch, uint16_t color,uint8_t emission=0) {
     if (x<0 || x>=COLS || y<0 || y>=rows || !isfinite(z)) return;
     Cell &c = cells[y*COLS+x];
@@ -86,7 +106,7 @@ class Scene {
     float distance=4.4f+zz;
     if (distance <= 0.2f) return;
     float f=4.4f/distance;
-    float scale = (rows*CELL_H)*0.37f;
+    float scale = viewScale();
     float sx=120+x*f*scale, sy=rows*CELL_H*0.48f-yy*f*scale;
     if (!isfinite(sx) || !isfinite(sy)) return;
     // floor rather than truncation keeps offscreen coordinates outside the grid.
@@ -119,15 +139,31 @@ class Scene {
   }
   void add(float x,float y,float z,uint16_t color,float born,char glyph,uint8_t kind,
            float nx=NAN,float ny=0.45f,float nz=0,float ao=1) {
-    if (count >= MAX_POINTS || points == nullptr) { overflow=true; return; }
+    if(points==nullptr) {overflow=true;return;}
+    int index=count;
+    if(pointCapacity<MAX_POINTS) {
+      // Two deterministic reservoirs retain both geometry and small bright
+      // details when internal RAM is used instead of the large PSRAM cache.
+      bool bright=kind==GOLD || kind==LIGHT || kind==STAR;
+      int normalQuota=pointCapacity-pointCapacity/4;
+      int quota=bright?pointCapacity/4:normalQuota,offset=bright?normalQuota:0;
+      uint32_t &seen=bright?brightSeen:normalSeen;int &kept=bright?brightKept:normalKept;
+      ++seen;
+      if(kept<quota) index=offset+kept++;
+      else {uint32_t choice=hash(seen+(bright?9181:31337))%seen;if(choice>=uint32_t(quota))return;index=offset+int(choice);}
+      count=normalKept+brightKept;
+    } else {
+      if(count>=pointCapacity){overflow=true;return;}
+      ++count;
+    }
     if(!isfinite(nx)) { float r=sqrtf(x*x+z*z);nx=r>0?x/r:0;nz=r>0?z/r:-1; }
     float inv=1.0f/sqrtf(nx*nx+ny*ny+nz*nz);
-    points[count++]={x,y,z,color,uint16_t(born*1000),glyph,kind,
+    points[index]={x,y,z,color,uint16_t(born*1000),glyph,kind,
       int8_t(nx*inv*127),int8_t(ny*inv*127),int8_t(nz*inv*127),uint8_t(clamp(ao,0,1)*255)};
   }
   static float radius(float y) { return 0.78f*powf(clamp((0.88f-y)/1.65f,0,1),0.95f); }
   void buildTree() {
-    count=0; overflow=false;
+    resetPoints();
     const char *ramp="xv%&#W";
     // Whorls of sagging branches, with a dark core for a solid silhouette.
     for (int layer=0; layer<21; ++layer) {
@@ -202,11 +238,12 @@ class Scene {
       }
       if(inside) add(x,1.025f+y,0,rgb(255,218,78),11.5f,'#',STAR);
     }
+    finishPoints();
   }
   void background(float t) {
     for (int i=0;i<90;++i) {
       float x=noise(i*7+8)*COLS;
-      float speed=tree?0.6f:-0.3f;
+      float speed=(tree || globe)?0.6f:-0.3f;
       float y=fmodf(noise(i*7+9)*rows+speed*t,float(rows));
       if(y<0) y+=rows;
       float shine=0.35f+0.4f*powf(0.5f+0.5f*sinf(t*1.3f+i),6);
@@ -300,9 +337,10 @@ class Scene {
   void render(float t, bool split) {
     rows=split?SPLIT_ROWS:MAX_ROWS;
     for(int i=0;i<COLS*MAX_ROWS;++i) cells[i]={10000,0,' ',0};
-    angle=t*TAU/20; spinC=cosf(angle);spinS=sinf(angle);
+    angle=t*TAU/(globe?24:20); spinC=cosf(angle);spinS=sinf(angle);
     background(t);
-    if(tree) drawTree(t);
+    if(globe) drawGlobe(t);
+    else if(tree) drawTree(t);
     else {
       jelly(t,0,0.02f+0.055f*sinf(t*1.2f),0,1);
       jelly(t+3,-1.22f,0.62f+0.12f*sinf(t*0.5f),1.4f,0.23f,true);
@@ -331,3 +369,4 @@ inline uint16_t glyphBits(char c) {
   #undef G
 }
 } // namespace ascii_show
+#include "SnowGlobe.h"

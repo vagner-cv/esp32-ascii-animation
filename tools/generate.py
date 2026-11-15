@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build four standalone Arduino folders from the canonical engine. No extra packages."""
+"""Build six standalone Arduino folders from the canonical engine. No extra packages."""
 from pathlib import Path
 import json
 import shutil
@@ -14,17 +14,20 @@ def excerpt(start, end):
 
 tree = excerpt("void buildTree() {", "void background(")
 jelly = excerpt("void jelly(float t, float cx,float cy,float cz,float size, bool small=false) {", "void render(")
+globe_source = (ROOT / "engine/SnowGlobe.h").read_text()
+globe = [line[2:] if line.startswith("  ") else line for line in globe_source.split("inline void Scene::drawGlobe(float t) {",1)[1].split("} // namespace",1)[0].splitlines() if line.strip()]
 # The panel displays actual excerpts, not a Python script or an executable editor.
 def array(name, lines):
     return (f"static const char *const {name}[] = {{\n" +
             "\n".join("  " + json.dumps(line, ensure_ascii=True) + "," for line in lines) +
             f"\n}};\nconstexpr int {name}_COUNT = sizeof({name})/sizeof({name}[0]);\n")
 
-code = "#pragma once\nnamespace ascii_show {\n" + array("TREE_CODE", tree) + array("JELLY_CODE", jelly) + "}\n"
+code = "#pragma once\nnamespace ascii_show {\n" + array("TREE_CODE", tree) + array("JELLY_CODE", jelly) + array("GLOBE_CODE",globe) + "}\n"
 (ROOT / "engine/CodeLines.h").write_text(code)
-MODES = [("Arvore_ASCII", 1, 0), ("Arvore_ASCII_Codigo", 1, 1),
-         ("AguaViva_ASCII", 0, 0), ("AguaViva_ASCII_Codigo", 0, 1)]
-for name, is_tree, show_code in MODES:
+MODES = [("Arvore_ASCII", 1, 0, 0), ("Arvore_ASCII_Codigo", 1, 1, 0),
+         ("AguaViva_ASCII", 0, 0, 0), ("AguaViva_ASCII_Codigo", 0, 1, 0),
+         ("GloboNeve_ASCII", 0, 0, 1), ("GloboNeve_ASCII_Codigo", 0, 1, 1)]
+for name, is_tree, show_code, is_globe in MODES:
     sketch = ROOT / name
     (sketch / "src").mkdir(parents=True, exist_ok=True)
     for header in (ROOT / "engine").glob("*.h"):
@@ -35,9 +38,10 @@ for name, is_tree, show_code in MODES:
 // Serial: p pausa/retoma, r reinicia; 115200 baud.
 #define ASCII_TREE {is_tree}
 #define ASCII_CODE {show_code}
+#define ASCII_GLOBE {is_globe}
 #define ASCII_HIGH_DETAIL 1 // 80x60 caracteres suavizados; 0 = 60x40 nitidos.
 #include "src/AsciiShow.h"
 void setup() {{ ascii_show::begin(); }}
 void loop() {{ ascii_show::tick(); }}
 ''')
-print("Generated four standalone sketches and source excerpts.")
+print("Generated six standalone sketches and source excerpts.")

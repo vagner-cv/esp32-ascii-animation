@@ -15,6 +15,7 @@ Arduino_DataBus *bus = new Arduino_ESP32SPI(LCD_DC,LCD_CS,LCD_SCK,LCD_MOSI,GFX_N
 Arduino_GFX *lcd = new Arduino_ST7789(bus,LCD_RST,0,true,240,240,0,0,0,0);
 Arduino_Canvas *canvas = new Arduino_Canvas(240,240,lcd,0,0,DISPLAY_ROTATION);
 static Point *storage = nullptr;
+static int storageCapacity=MAX_POINTS;
 static Scene *scene = nullptr;
 static bool ready=false, paused=false;
 static uint32_t lastTick=0,lastDraw=0,lastReport=0,frames=0,clockMs=0;
@@ -81,11 +82,11 @@ inline void codePanel(float time) {
   canvas->fillRect(0,TOP,240,HEADER,rgb(20,27,42));
   canvas->drawFastHLine(0,TOP,240,rgb(64,79,102));
   canvas->setTextColor(rgb(157,186,211));canvas->setCursor(4,TOP+3);
-  canvas->print(ASCII_TREE?"christmas_tree.cpp":"jellyfish.cpp");
+  canvas->print(ASCII_GLOBE?"snow_globe.cpp":(ASCII_TREE?"christmas_tree.cpp":"jellyfish.cpp"));
   canvas->setTextColor(rgb(85,224,191));canvas->setCursor(192,TOP+3);
   canvas->print(paused?"PAUSADO":"CODIGO");
-  const char *const *lines=ASCII_TREE?TREE_CODE:JELLY_CODE;
-  int length=ASCII_TREE?TREE_CODE_COUNT:JELLY_CODE_COUNT;
+  const char *const *lines=ASCII_GLOBE?GLOBE_CODE:(ASCII_TREE?TREE_CODE:JELLY_CODE);
+  int length=ASCII_GLOBE?GLOBE_CODE_COUNT:(ASCII_TREE?TREE_CODE_COUNT:JELLY_CODE_COUNT);
   uint32_t scroll=uint32_t(time*12);
   int first=(scroll/LINE_H)%length, offset=scroll%LINE_H;
   canvas->fillRect(0,BODY+3*LINE_H,240,LINE_H,rgb(19,31,48));
@@ -109,6 +110,10 @@ inline void renderFrame(float time) {
     canvas->setCursor(87,scene->rows*CELL_H-8);canvas->setTextColor(rgb(222,187,91));
     canvas->print("FELIZ NATAL");
   }
+  if(ASCII_GLOBE) {
+    canvas->setCursor(75,2);canvas->setTextColor(rgb(192,209,240));
+    canvas->print("SNOW IN BANGKOK");
+  }
   if(ASCII_CODE) codePanel(time);
   canvas->flush();
 }
@@ -119,20 +124,37 @@ inline void begin() {
   if(!canvas->begin(40000000)) { Serial.println("ERRO: falha ao iniciar display/canvas"); return; }
   canvas->fillScreen(0);canvas->flush();digitalWrite(LCD_BL,HIGH);
   canvas->setTextSize(1);canvas->setTextWrap(false);prepareGlyphs();
-  if(ASCII_TREE) {
+  if(ASCII_TREE || ASCII_GLOBE) {
     size_t bytes=sizeof(Point)*MAX_POINTS;
+    Serial.printf("PSRAM disponivel: %u bytes\n",unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)));
     storage=static_cast<Point *>(heap_caps_malloc(bytes,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
-    if(!storage) storage=static_cast<Point *>(heap_caps_malloc(bytes,MALLOC_CAP_8BIT));
     if(!storage) {
-      Serial.println("ERRO: sem memoria para arvore. Ative OPI PSRAM.");
+      // Preserve a heap reserve for the runtime and choose a bounded lighter
+      // cache that fits the largest available block of internal RAM.
+      constexpr size_t RESERVE=40*1024,MIN_POINTS=512,MAX_LIGHT_POINTS=3072;
+      size_t freeBytes=heap_caps_get_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
+      size_t budget=freeBytes>RESERVE?freeBytes-RESERVE:0;
+      size_t largest=heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
+      if(budget>largest)budget=largest;
+      if(budget>MAX_LIGHT_POINTS*sizeof(Point))budget=MAX_LIGHT_POINTS*sizeof(Point);
+      while(budget>=MIN_POINTS*sizeof(Point) && !storage) {
+        storageCapacity=int(budget/sizeof(Point));
+        storage=static_cast<Point *>(heap_caps_malloc(storageCapacity*sizeof(Point),MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT));
+        if(!storage)budget/=2;
+      }
+      if(storage)Serial.printf("PSRAM indisponivel: modo leve, ate %d pontos. Para detalhe completo, habilite OPI PSRAM e grave novamente.\n",storageCapacity);
+    }
+    if(!storage) {
+      Serial.println("ERRO: memoria insuficiente para a cena. Confira OPI PSRAM e o log de inicializacao.");
       canvas->setTextColor(rgb(255,90,90));canvas->setCursor(6,100);
       canvas->print("Ative OPI PSRAM");canvas->flush();return;
     }
   }
-  static Scene instance(ASCII_TREE,storage);scene=&instance;
+  static Scene instance(ASCII_TREE,storage,ASCII_GLOBE,storageCapacity);scene=&instance;
   if(ASCII_TREE) scene->buildTree();
+  if(ASCII_GLOBE) scene->buildGlobe();
   if(scene->overflow) { Serial.println("ERRO: capacidade de pontos excedida"); return; }
-  Serial.printf("ASCII %s / %s | pontos=%d | grade=%dx%d\n",ASCII_TREE?"arvore":"agua-viva",ASCII_CODE?"com codigo":"tela cheia",scene->count,COLS,ASCII_CODE?SPLIT_ROWS:MAX_ROWS);
+  Serial.printf("ASCII %s / %s | pontos=%d | grade=%dx%d\n",ASCII_GLOBE?"globo de neve":(ASCII_TREE?"arvore":"agua-viva"),ASCII_CODE?"com codigo":"tela cheia",scene->count,COLS,ASCII_CODE?SPLIT_ROWS:MAX_ROWS);
   Serial.println("Serial: p=pausar/retomar, r=reiniciar. 115200 baud.");
   ready=true;lastTick=millis();lastReport=lastTick;
   renderFrame(0);
